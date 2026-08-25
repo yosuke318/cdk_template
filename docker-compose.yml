@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  cdk:
+    build: .
+    tty: true
+    volumes:
+      - ~/.aws:/root/.aws
