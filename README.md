@@ -15,6 +15,7 @@
 依存は一方向。`Network` / `Storage` → `Api` / `Service` / `Cdn`。
 
 ```
+config.py    # ステージ (dev/stg/prod) ごとの設定
 construct/   # 1 サービス 1 ファイルの再利用単位 (Construct)
 stacks/      # Construct を組み合わせたスタック
 assets/      # Lambda のソース
@@ -38,11 +39,44 @@ cdk diff
 cdk deploy --all
 ```
 
-ステージを分ける場合は context で上書きする。スタック名の接頭辞になる。
+## ステージ (dev / stg / prod)
+
+`-c stage=...` で切り替える。既定は `dev`。設定の実体は `config.py` の `STAGES`。
 
 ```bash
-cdk deploy --all -c stage=prd
+cdk deploy --all                 # dev
+cdk deploy --all -c stage=stg
+cdk deploy --all -c stage=prod
 ```
+
+スタック名に接頭辞が付き (`DevStorageStack` / `StgStorageStack` / `ProdStorageStack`)、
+`Stage` タグも付く。実際に変わる値は次の通り。
+
+| | dev | stg | prod |
+|---|---|---|---|
+| RemovalPolicy (S3/DynamoDB/ECR/Secret/Logs) | `DESTROY` | `DESTROY` | `RETAIN` |
+| S3 auto delete objects | 有効 | 有効 | 無効 |
+| ECR empty on delete | 有効 | 有効 | 無効 |
+| DynamoDB PITR | off | on | on |
+| NAT Gateway | 1 | 1 | 2 (AZ ごと) |
+| ECS desired count | 1 | 2 | 2 |
+| ログ保持 | 7 日 | 30 日 | 180 日 |
+| API Gateway ステージ名 | `dev` | `stg` | `prod` |
+
+**prod は `RETAIN`** なので、`cdk destroy` してもバケット・テーブル・ECR・Secret は
+残る。作り直す時は手で消すか、`config.py` を一時的に変える。
+
+未知のステージ名は synth 時に落ちる。typo でうっかり新環境を作らないため。
+
+```
+ValueError: unknown stage: 'prdo'. valid stages are: dev, stg, prod
+```
+
+### アカウント / リージョン
+
+既定では全ステージが同じアカウント (`CDK_DEFAULT_ACCOUNT`) に載る。ステージごとに
+アカウントを分けるなら `config.py` の `StageConfig.account` / `region` に直接書く。
+一時的な上書きは `-c account=... -c region=...`。
 
 ## デプロイ順の注意
 
@@ -60,12 +94,15 @@ cdk deploy --all
 
 ## 既定値と、本番前に見直すもの
 
-- **RemovalPolicy** — S3 / DynamoDB / ECR とも `DESTROY`。消えて困るものは `RETAIN` に変える
-- **NAT Gateway** — 1 台で常時課金される。検証で不要なら `app.py` の `nat_gateways=0`
+ステージ差のある値 (RemovalPolicy / NAT 数 / PITR / ログ保持 / タスク数) は `config.py`
+に集約してある。それ以外で見直すもの:
+
 - **ALB** — HTTP:80 のみ。ACM 証明書を取ったら 443 リスナーを足して 80 はリダイレクトへ
 - **Secrets Manager** — 値は CDK に書かない。空の入れ物だけ作ってあるので中身は AWS 側で埋める
-- **ログ保持** — 全ロググループ 30 日 (`construct/logs.py`)
-- **DynamoDB PITR** — 既定 off。`construct/dynamodb.py` の `point_in_time_recovery`
+- **NAT Gateway** — 1 台でも常時課金される。dev で不要なら `config.py` で `nat_gateways=0`
+  (ただし PRIVATE_WITH_EGRESS からの外向き通信が切れる)
+- **API Gateway の CloudWatch ロール** — リージョンに 1 つの設定。同じアカウントで
+  複数の CDK アプリを動かすなら `construct/api_gateway.py` の `cloud_watch_role` を要調整
 
 ## CloudFront + OAC のクロススタック参照について
 

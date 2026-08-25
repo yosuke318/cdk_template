@@ -7,6 +7,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+from config import StageConfig
 from construct.alb import AlbConstruct
 from construct.ecs import EcsConstruct
 from construct.logs import LogGroupConstruct
@@ -24,23 +25,26 @@ class ServiceStack(Stack):
         scope: Construct,
         construct_id: str,
         *,
+        config: StageConfig,
         vpc: ec2.IVpc,
         alb_security_group: ec2.ISecurityGroup,
         service_security_group: ec2.ISecurityGroup,
         repository: ecr.IRepository,
         secret: secretsmanager.ISecret,
         image_tag: str = "latest",
-        container_port: int = 80,
         health_check_path: str = "/",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        service_logs = LogGroupConstruct(self, "ServiceLogs").log_group
+        service_logs = LogGroupConstruct(
+            self,
+            "ServiceLogs",
+            retention=config.log_retention,
+            removal_policy=config.removal_policy,
+        ).log_group
 
-        alb = AlbConstruct(
-            self, "Alb", vpc=vpc, security_group=alb_security_group
-        )
+        alb = AlbConstruct(self, "Alb", vpc=vpc, security_group=alb_security_group)
 
         ecs_service = EcsConstruct(
             self,
@@ -50,13 +54,15 @@ class ServiceStack(Stack):
             repository=repository,
             log_group=service_logs,
             image_tag=image_tag,
-            container_port=container_port,
+            container_port=config.container_port,
+            desired_count=config.desired_count,
+            environment={"STAGE": config.stage},
             secrets={"APP_SECRET": secret},
         )
 
         alb.add_targets(
             [ecs_service.service],
-            port=container_port,
+            port=config.container_port,
             health_check_path=health_check_path,
         )
 
