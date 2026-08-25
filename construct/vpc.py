@@ -5,8 +5,15 @@ from constructs import Construct
 class VpcConstruct(Construct):
     """ECS / ALB を載せるための VPC。
 
-    nat_gateways は 1 つでも常時課金されるため、検証用途で不要なら 0 にして
-    private_with_egress サブネットを isolated に置き換えて使う。
+    nat_gateways は 1 つでも常時課金される。ただし 0 にしても
+    PRIVATE_WITH_EGRESS サブネット自体は残り、そこへの default route だけが
+    消える (エラーにはならない)。結果としてサブネットの型は
+    「egress あり」のままなのに実際には外に出られない状態になり、
+    ECS が ECR からイメージを引けず原因の分かりにくい失敗をする。
+
+    NAT を無くしたい場合は、代わりに ECR / CloudWatch Logs / Secrets Manager
+    への VPC エンドポイントを張るか、subnet_configuration ごと
+    PRIVATE_ISOLATED に組み替えること。
     """
 
     def __init__(

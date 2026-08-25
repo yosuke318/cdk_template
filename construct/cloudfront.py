@@ -10,8 +10,19 @@ from constructs import Construct
 class CloudFrontConstruct(Construct):
     """S3 を OAC で配信する CloudFront ディストリビューション。
 
-    OAC ではバケットをパブリックにしない。S3BucketOrigin.with_origin_access_control
-    がバケットポリシーに「この Distribution だけ読める」条件を自動で追加する。
+    OAC ではバケットをパブリックにしない。
+
+    バケットポリシーの扱いは、渡すバケットが「同じスタックで作ったもの」か
+    「インポートしたもの」かで変わる:
+
+    - 同一スタックのバケット: S3BucketOrigin.with_origin_access_control が
+      「この Distribution だけ読める」条件付きのポリシーを自動で追加する。
+    - インポートしたバケット: CDK はポリシーを変更できず、synth 時に
+      "Cannot update bucket policy of an imported bucket" と警告するだけ。
+      読み取り許可は別途バケット側で付ける必要がある。
+
+    CdnStack は循環参照を避けるため後者 (インポート) を使っている。許可は
+    StorageStack 側の S3Construct.grant_cloudfront_read で付与している。
     """
 
     def __init__(

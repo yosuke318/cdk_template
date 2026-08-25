@@ -99,8 +99,10 @@ cdk deploy --all
 
 - **ALB** — HTTP:80 のみ。ACM 証明書を取ったら 443 リスナーを足して 80 はリダイレクトへ
 - **Secrets Manager** — 値は CDK に書かない。空の入れ物だけ作ってあるので中身は AWS 側で埋める
-- **NAT Gateway** — 1 台でも常時課金される。dev で不要なら `config.py` で `nat_gateways=0`
-  (ただし PRIVATE_WITH_EGRESS からの外向き通信が切れる)
+- **NAT Gateway** — 1 台でも常時課金される。`config.py` で `nat_gateways=0` にはできるが、
+  サブネットは PRIVATE_WITH_EGRESS のまま残り default route だけが消えるため、ECS が
+  ECR からイメージを引けなくなる (エラーにならず分かりにくい形で失敗する)。NAT を
+  無くすなら ECR / Logs / Secrets Manager への VPC エンドポイントを張ること
 - **API Gateway の CloudWatch ロール** — リージョンに 1 つの設定。同じアカウントで
   複数の CDK アプリを動かすなら `construct/api_gateway.py` の `cloud_watch_role` を要調整
 
