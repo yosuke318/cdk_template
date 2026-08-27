@@ -1,0 +1,17 @@
+services:
+  cdk:
+    build: .
+    tty: true
+    stdin_open: true
+    working_dir: /app
+    volumes:
+      # ソースをマウントしておくと、編集のたびに build し直さずに済む
+      - .:/app
+      # 認証情報は読み取り専用で渡す
+      - ~/.aws:/root/.aws:ro
+      # cdk.out をホストと共有したくない場合はここを匿名ボリュームにする
+      - /app/cdk.out
+    environment:
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-northeast-1}
+      - CDK_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-northeast-1}
